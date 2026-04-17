@@ -2,12 +2,15 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import time
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Dancing Toy Simulator", layout="wide")
 
 st.title("🕺 Dancing Dashboard Toy: Vibration Simulator")
+st.markdown("""
+This dashboard simulates the motion of a non-electronic dashboard toy. 
+It models the toy as a **Spring-Mass-Damper system** excited by car vibrations.
+""")
 
 # --- SIDEBAR CONTROLS ---
 st.sidebar.header("Design Parameters")
@@ -19,89 +22,64 @@ st.sidebar.header("Vehicle Input")
 car_freq = st.sidebar.slider("Road Vibration Frequency (Hz)", 1, 50, 15)
 
 # --- PHYSICS CALCULATIONS ---
+# Natural Frequency: ωn = sqrt(k/m)
 wn = np.sqrt(k_stiffness / mass)
 fn = wn / (2 * np.pi)
+
+# Frequency Ratio: r = f / fn
+freq_range = np.linspace(0.1, 60, 500)
+r_range = freq_range / fn
 r_input = car_freq / fn
 
+# Magnification Factor (Amplitude Ratio): 
+# MF = 1 / sqrt((1-r^2)^2 + (2*zeta*r)^2)
 def get_magnification(r, zeta):
     return 1 / np.sqrt((1 - r**2)**2 + (2 * zeta * r)**2)
 
+mf_curve = get_magnification(r_range, damping_ratio)
 current_mf = get_magnification(r_input, damping_ratio)
-input_amp = 5 
-output_amp = input_amp * current_mf
 
-# --- VISUALIZATION LAYOUT ---
+# --- VISUALIZATION ---
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader("Live Dance Floor")
-    # This is the "Stable" placeholder that won't disappear
-    plot_spot = st.empty()
-    start_ani = st.button("▶️ Start Dancing")
-
-with col2:
-    st.subheader("System Status")
-    st.metric("Natural Frequency", f"{fn:.2f} Hz")
-    st.metric("Movement Gain", f"{current_mf:.2f}x")
-    
-    if 0.9 < r_input < 1.1:
-        st.error("RESONANCE!")
-    elif current_mf > 1.5:
-        st.success("DANCING")
-    else:
-        st.info("STILL")
-
-# --- ANIMATION LOGIC ---
-# We define the figure structure ONCE outside the loop
-def create_frame(y_pos):
+    st.subheader("Frequency Response Analysis")
     fig = go.Figure()
     
-    # 1. The Spring (Line from base to head)
-    fig.add_trace(go.Scatter(
-        x=[0, 0], y=[-10, y_pos],
-        mode='lines+markers',
-        line=dict(color='gray', width=4, dash='dot'),
-        marker=dict(symbol='diamond', size=10)
-    ))
+    # Plot resonance curve
+    fig.add_trace(go.Scatter(x=freq_range, y=mf_curve, name="System Response", line=dict(color='royalblue', width=3)))
     
-    # 2. The Toy Head
-    fig.add_trace(go.Scatter(
-        x=[0], y=[y_pos],
-        mode='markers+text',
-        marker=dict(size=50, color='Gold', line=dict(width=2, color='Black')),
-        text=["🤩"], textfont=dict(size=25)
-    ))
-    
-    # 3. The Dashboard Base
-    fig.add_trace(go.Scatter(
-        x=[-20, 20], y=[-10, -10],
-        mode='lines',
-        line=dict(color='black', width=6)
-    ))
+    # Highlight current operating point
+    fig.add_trace(go.Scatter(x=[car_freq], y=[current_mf], mode='markers+text', 
+                             name='Current Operation', text=["Working Point"],
+                             textposition="top right", marker=dict(color='red', size=12)))
 
     fig.update_layout(
-        template="plotly_white",
-        xaxis=dict(range=[-40, 40], visible=False),
-        yaxis=dict(range=[-60, 60], visible=False),
-        showlegend=False,
-        height=400,
-        margin=dict(l=0, r=0, t=0, b=0)
+        xaxis_title="Input Frequency (Hz)",
+        yaxis_title="Amplitude Magnification (Output/Input)",
+        hovermode="x unified",
+        template="plotly_white"
     )
-    return fig
+    st.plotly_chart(fig, use_container_広告=True)
 
-# Initial Static State
-if not start_ani:
-    plot_spot.plotly_chart(create_frame(0), use_container_width=True)
+with col2:
+    st.subheader("Engineering Metrics")
+    st.metric("Natural Frequency (fn)", f"{fn:.2f} Hz")
+    st.metric("Current Gain", f"{current_mf:.2f}x")
+    
+    # Logic for user feedback
+    if 0.9 < r_input < 1.1:
+        st.error("⚠️ RESONANCE DETECTED: The toy will shake violently!")
+    elif current_mf > 1.5:
+        st.success("✅ GOOD DANCING: Noticeable motion achieved.")
+    else:
+        st.warning("💤 STATIC: Toy is barely moving. Lower stiffness or increase mass.")
 
-# Active Animation Loop
-if start_ani:
-    fps = 25
-    t_ani = np.linspace(0, 4, fps * 4)
-    # Scale down frequency for visual clarity in the browser
-    visual_freq = car_freq if car_freq < 10 else 5 + (car_freq / 10)
-    displacement = output_amp * np.sin(2 * np.pi * visual_freq * t_ani)
-
-    for y in displacement:
-        # Crucial: Use a static key or no key at all within the loop to prevent re-rendering the whole page
-        plot_spot.plotly_chart(create_frame(y), use_container_width=True)
-        time.sleep(0.04) # Match FPS
+# --- OSCILLATION PREVIEW (TIME DOMAIN) ---
+st.divider()
+st.subheader("Real-time Oscillation Preview")
+t = np.linspace(0, 2, 500)
+# Simple sine wave representation of steady-state response
+y = current_mf * np.sin(2 * np.pi * car_freq * t)
+df_time = pd.DataFrame({"Time (s)": t, "Displacement": y})
+st.line_chart(df_time, x="Time (s)", y="Displacement")
