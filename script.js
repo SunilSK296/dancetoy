@@ -1,82 +1,153 @@
-const canvas = document.getElementById("canvas");
+const canvas = document.getElementById("toyCanvas");
 const ctx = canvas.getContext("2d");
 
 canvas.width = 400;
 canvas.height = 500;
 
 // Inputs
-const mass = document.getElementById("mass");
-const k = document.getElementById("k");
-const c = document.getElementById("c");
-const freq = document.getElementById("freq");
+const mSlider = document.getElementById("mass");
+const kSlider = document.getElementById("k");
+const cSlider = document.getElementById("c");
+const fSlider = document.getElementById("freq");
 
-const info = document.getElementById("info");
+const fnBox = document.getElementById("fnBox");
+const ampBox = document.getElementById("ampBox");
+const statusBox = document.getElementById("status");
+
+// Charts
+const freqChart = new Chart(document.getElementById("freqChart"), {
+    type: 'line',
+    data: { labels: [], datasets: [{ label: 'Amplitude', data: [] }] },
+});
+
+const timeChart = new Chart(document.getElementById("timeChart"), {
+    type: 'line',
+    data: { labels: [], datasets: [{ label: 'Displacement', data: [] }] },
+});
 
 let t = 0;
 
-function animate() {
-    requestAnimationFrame(animate);
+function updatePhysics() {
 
-    let m = parseFloat(mass.value);
-    let stiffness = parseFloat(k.value);
-    let damping = parseFloat(c.value);
-    let f = parseFloat(freq.value);
+    let m = parseFloat(mSlider.value);
+    let k = parseFloat(kSlider.value);
+    let c = parseFloat(cSlider.value);
+    let f = parseFloat(fSlider.value);
 
     let omega = 2 * Math.PI * f;
 
-    // Natural frequency
-    let fn = (1/(2*Math.PI)) * Math.sqrt(stiffness/m);
+    let fn = (1/(2*Math.PI)) * Math.sqrt(k/m);
 
-    // Amplitude
-    let A = 1 / Math.sqrt((stiffness - m*omega*omega)**2 + (damping*omega)**2);
+    let A = 1 / Math.sqrt((k - m*omega**2)**2 + (c*omega)**2);
 
-    let x = A * Math.sin(omega * t);
+    fnBox.innerHTML = `Natural Frequency: ${fn.toFixed(2)} Hz`;
+    ampBox.innerHTML = `Amplitude: ${A.toFixed(3)}`;
 
-    t += 0.05;
+    if (Math.abs(fn - f) < 2) {
+        statusBox.innerHTML = "🔥 Resonance!";
+    } else {
+        statusBox.innerHTML = "⚠️ Not in resonance";
+    }
 
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return {A, omega, fn};
+}
+
+// Frequency Graph
+function updateFreqGraph(m, k, c) {
+
+    let freqs = [];
+    let amps = [];
+
+    for (let f = 1; f <= 30; f++) {
+        let omega = 2*Math.PI*f;
+        let A = 1 / Math.sqrt((k - m*omega**2)**2 + (c*omega)**2);
+        freqs.push(f);
+        amps.push(A);
+    }
+
+    freqChart.data.labels = freqs;
+    freqChart.data.datasets[0].data = amps;
+    freqChart.update();
+}
+
+// Time Graph
+function updateTimeGraph(A, omega) {
+
+    let tVals = [];
+    let xVals = [];
+
+    for (let i = 0; i < 100; i++) {
+        let tt = i * 0.05;
+        tVals.push(tt);
+        xVals.push(A * Math.sin(omega * tt));
+    }
+
+    timeChart.data.labels = tVals;
+    timeChart.data.datasets[0].data = xVals;
+    timeChart.update();
+}
+
+// Animation
+function draw(A, omega) {
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    let x = A * Math.sin(omega * t) * 100;
 
     // Base
-    ctx.fillRect(150, 420, 100, 20);
+    ctx.fillStyle = "#555";
+    ctx.fillRect(150, 450, 100, 20);
 
-    // Spring (zig-zag)
-    let startY = 420;
-    let endY = 250 + x * 50;
+    let baseY = 450;
+    let topY = 300 + x;
 
-    let coils = 10;
-    let step = (startY - endY) / coils;
-
+    // Spring
     ctx.beginPath();
-    for (let i = 0; i < coils; i++) {
+    for (let i = 0; i < 12; i++) {
         let xPos = (i % 2 === 0) ? 180 : 220;
-        ctx.lineTo(xPos, startY - i * step);
+        let yPos = baseY - i * ((baseY - topY)/12);
+        ctx.lineTo(xPos, yPos);
     }
+    ctx.strokeStyle = "white";
     ctx.stroke();
 
     // Body
-    ctx.fillRect(180, endY - 40, 40, 50);
+    ctx.fillStyle = "#00d4ff";
+    ctx.fillRect(180, topY - 50, 40, 50);
 
     // Head
     ctx.beginPath();
-    ctx.arc(200, endY - 70, 20, 0, Math.PI * 2);
+    ctx.arc(200, topY - 70, 20, 0, Math.PI*2);
+    ctx.fillStyle = "#ffd166";
     ctx.fill();
 
-    // Face
+    // Eyes
     ctx.fillStyle = "black";
-    ctx.fillRect(192, endY - 75, 4, 4);
-    ctx.fillRect(204, endY - 75, 4, 4);
+    ctx.fillRect(193, topY - 75, 4, 4);
+    ctx.fillRect(203, topY - 75, 4, 4);
 
+    // Smile
     ctx.beginPath();
-    ctx.arc(200, endY - 65, 8, 0, Math.PI);
+    ctx.arc(200, topY - 65, 8, 0, Math.PI);
     ctx.stroke();
 
-    // Info
-    info.innerHTML = `
-        Natural Frequency: ${fn.toFixed(2)} Hz <br>
-        Amplitude: ${A.toFixed(3)} <br>
-        ${Math.abs(fn - f) < 2 ? "🔥 Resonance!" : "⚠️ Not in resonance"}
-    `;
+    t += 0.05;
 }
 
-animate();
+function loop() {
+
+    let m = parseFloat(mSlider.value);
+    let k = parseFloat(kSlider.value);
+    let c = parseFloat(cSlider.value);
+
+    let {A, omega, fn} = updatePhysics();
+
+    draw(A, omega);
+
+    updateFreqGraph(m, k, c);
+    updateTimeGraph(A, omega);
+
+    requestAnimationFrame(loop);
+}
+
+loop();
