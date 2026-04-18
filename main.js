@@ -1,6 +1,6 @@
 /**
- * VIBRASIM PRO - FIXED RENDERER
- * RK4 Integration + Organic Robot Construction
+ * VIBRASIM PRO - UNIFIED EDITION
+ * Robot Design (v1) + Analytics (v2)
  */
 
 const state = {
@@ -12,9 +12,9 @@ const state = {
 
 let scene, camera, renderer, spring, robot, robotHead, leftArmGroup, rightArmGroup;
 let isDragging = false, previousMousePosition = { x: 0, y: 0 };
-let theta = 45, phi = 60, radius = 18; // Camera Control State
+let theta = 45, phi = 60, radius = 18; 
 
-// --- 1. INITIALIZE 3D SCENE ---
+// --- 1. 3D ROBOT CONSTRUCTION (From Code 1) ---
 const init3D = () => {
     const container = document.getElementById('canvas-container');
     scene = new THREE.Scene();
@@ -34,7 +34,7 @@ const init3D = () => {
         if (isDragging) {
             theta -= (e.movementX || 0) * 0.5;
             phi += (e.movementY || 0) * 0.5;
-            phi = Math.max(10, Math.min(85, phi)); // Prevent flipping
+            phi = Math.max(10, Math.min(85, phi)); 
             updateCamera();
         }
     });
@@ -44,32 +44,30 @@ const init3D = () => {
         updateCamera();
     });
 
-    // LIGHTING
     scene.add(new THREE.AmbientLight(0xffffff, 0.5));
     const sun = new THREE.DirectionalLight(0xffffff, 1);
     sun.position.set(10, 20, 10);
     sun.castShadow = true;
     scene.add(sun);
 
-    // ROBOT CONSTRUCTION
     robot = new THREE.Group();
     const ironMat = new THREE.MeshStandardMaterial({ color: 0x444b59, metalness: 0.8, roughness: 0.3 });
     const glowMat = new THREE.MeshStandardMaterial({ color: 0x00f2ff, emissive: 0x00f2ff, emissiveIntensity: 1.5 });
 
-    // BODY (Torso) - Using Cylinder for stability
+    // Body
     const torso = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.8, 2.5, 16), ironMat);
     torso.position.y = 1.25;
     torso.castShadow = true;
     robot.add(torso);
 
-    // HEAD (Round)
+    // Round Head
     robotHead = new THREE.Group();
     robotHead.position.y = 2.5; 
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.9, 32, 32), ironMat);
     skull.position.y = 0.8;
     robotHead.add(skull);
 
-    // Eyes (Bright Cyan)
+    // Eyes
     const eyeGeo = new THREE.SphereGeometry(0.15, 16, 16);
     const eyeL = new THREE.Mesh(eyeGeo, glowMat);
     eyeL.position.set(-0.35, 0.9, 0.75);
@@ -78,7 +76,7 @@ const init3D = () => {
     robotHead.add(eyeL, eyeR);
     robot.add(robotHead);
 
-    // ARMS (Realist Joints)
+    // Articulated Arms
     const createArm = (side) => {
         const armGroup = new THREE.Group();
         const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), ironMat);
@@ -86,7 +84,6 @@ const init3D = () => {
         bicep.position.y = -0.6;
         const hand = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.3), ironMat);
         hand.position.y = -1.3;
-        
         armGroup.add(shoulder, bicep, hand);
         armGroup.position.set(side * 1.3, 2.2, 0);
         return armGroup;
@@ -95,10 +92,8 @@ const init3D = () => {
     leftArmGroup = createArm(-1);
     rightArmGroup = createArm(1);
     robot.add(leftArmGroup, rightArmGroup);
-
     scene.add(robot);
 
-    // DASHBOARD
     const plat = new THREE.Mesh(new THREE.BoxGeometry(10, 0.5, 10), new THREE.MeshStandardMaterial({ color: 0x111111 }));
     plat.position.y = -5;
     plat.receiveShadow = true;
@@ -110,9 +105,7 @@ const init3D = () => {
 const updateCamera = () => {
     const p = phi * (Math.PI / 180);
     const t = theta * (Math.PI / 180);
-    camera.position.x = radius * Math.sin(p) * Math.cos(t);
-    camera.position.y = radius * Math.cos(p);
-    camera.position.z = radius * Math.sin(p) * Math.sin(t);
+    camera.position.set(radius * Math.sin(p) * Math.cos(t), radius * Math.cos(p), radius * Math.sin(p) * Math.sin(t));
     camera.lookAt(0, 0, 0);
 };
 
@@ -128,31 +121,95 @@ const updateSpring = (h) => {
     robot.position.y = h - 5;
 };
 
-// --- 2. PHYSICS ENGINE & UI ---
+// --- 2. ANALYTICS (From Code 2) ---
+let timeChart, freqChart;
+const initCharts = () => {
+    const timeCtx = document.getElementById('timeChart').getContext('2d');
+    timeChart = new Chart(timeCtx, {
+        type: 'line',
+        data: {
+            labels: Array(state.maxHistory).fill(''),
+            datasets: [{
+                data: [],
+                borderColor: '#00f2ff',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.3,
+                fill: true,
+                backgroundColor: 'rgba(0, 242, 255, 0.03)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            scales: { y: { min: -1, max: 1, grid: { color: 'rgba(255,255,255,0.02)' } }, x: { display: false } },
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    const freqCtx = document.getElementById('freqChart').getContext('2d');
+    freqChart = new Chart(freqCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{ label: 'Curve', data: [], borderColor: '#444', borderWidth: 1.5, pointRadius: 0, tension: 0.4 },
+                       { label: 'Point', data: [], borderColor: '#00f2ff', pointBackgroundColor: '#00f2ff', pointRadius: 6, showLine: false }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.02)' } }, x: { grid: { display: false } } },
+            plugins: { legend: { display: false } }
+        }
+    });
+};
+
+const updateFreqChart = () => {
+    const labels = [], data = [];
+    const wn = Math.sqrt(state.k / state.m);
+    const c = state.zeta * (2 * Math.sqrt(state.m * state.k));
+    for (let w = 1; w < 70; w += 1) {
+        labels.push(w);
+        const denom = Math.sqrt(Math.pow(state.k - state.m * Math.pow(w, 2), 2) + Math.pow(c * w, 2));
+        data.push(state.f0 / denom);
+    }
+    freqChart.data.labels = labels;
+    freqChart.data.datasets[0].data = data;
+    freqChart.data.datasets[1].data = labels.map(l => l === Math.round(state.w) ? state.X_amp : null);
+    freqChart.update('none');
+};
+
+// --- 3. PHYSICS & LOOP ---
 const updatePhysics = (dt) => {
     const wn = Math.sqrt(state.k / state.m);
     state.fn = wn / (2 * Math.PI);
     const c = state.zeta * (2 * Math.sqrt(state.m * state.k));
-    const force = state.f0 * Math.sin(state.w * state.t);
-    
-    // Simple Euler for performance in high-frequency
-    const a = (force - c * state.v - state.k * state.x) / state.m;
-    state.v += a * dt;
-    state.x += state.v * dt;
+    const denom = Math.sqrt(Math.pow(state.k - state.m * Math.pow(state.w, 2), 2) + Math.pow(c * state.w, 2));
+    state.X_amp = state.f0 / denom;
+    state.phase = Math.atan2(c * state.w, state.k - state.m * Math.pow(state.w, 2));
+
+    const accel = (t, x, v) => {
+        const force = state.f0 * Math.sin(state.w * t);
+        return (force - c * v - state.k * x) / state.m;
+    };
+
+    // RK4 Integration
+    const k1x = state.v;
+    const k1v = accel(state.t, state.x, state.v);
+    const k2x = state.v + 0.5 * dt * k1v;
+    const k2v = accel(state.t + 0.5 * dt, state.x + 0.5 * dt * k1x, state.v + 0.5 * dt * k1v);
+    const k3x = state.v + 0.5 * dt * k2v;
+    const k3v = accel(state.t + 0.5 * dt, state.x + 0.5 * dt * k2x, state.v + 0.5 * dt * k2v);
+    const k4x = state.v + dt * k3v;
+    const k4v = accel(state.t + dt, state.x + dt * k3x, state.v + dt * k3v);
+
+    state.x += (dt / 6) * (k1x + 2 * k2x + 2 * k3x + k4x);
+    state.v += (dt / 6) * (k1v + 2 * k2v + 2 * k3v + k4v);
     state.t += dt;
 
-    state.X_amp = state.f0 / Math.sqrt(Math.pow(state.k - state.m * state.w**2, 2) + (c * state.w)**2);
     state.history.push(state.x);
-    if (state.history.length > 200) state.history.shift();
-};
-
-let timeChart;
-const initCharts = () => {
-    timeChart = new Chart(document.getElementById('timeChart'), {
-        type: 'line',
-        data: { labels: Array(200).fill(''), datasets: [{ data: [], borderColor: '#00f2ff', pointRadius: 0, fill: true, backgroundColor: 'rgba(0,242,255,0.05)' }] },
-        options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { x: { display: false }, y: { min: -1, max: 1 } }, plugins: { legend: { display: false } } }
-    });
+    if (state.history.length > state.maxHistory) state.history.shift();
 };
 
 const loop = () => {
@@ -160,38 +217,46 @@ const loop = () => {
     const h = 5 + (state.x * 6);
     updateSpring(h);
 
-    // Oscillating Animations
+    // Animations
     const phase = Math.sin(state.t * state.w);
     robotHead.rotation.x = phase * (state.X_amp * 2);
     leftArmGroup.rotation.x = -phase * (state.X_amp * 4);
     rightArmGroup.rotation.x = phase * (state.X_amp * 4);
 
-    // Metrics Update
+    // Update UI
     document.getElementById('metric-fn').innerText = `${state.fn.toFixed(2)} Hz`;
     document.getElementById('metric-amp').innerText = `${state.X_amp.toFixed(4)} m`;
-
+    
+    // Update Charts
     timeChart.data.datasets[0].data = state.history;
+    timeChart.options.scales.y.min = -Math.max(0.2, state.X_amp * 2);
+    timeChart.options.scales.y.max = Math.max(0.2, state.X_amp * 2);
     timeChart.update('none');
+
+    // Update Bode Point
+    freqChart.data.datasets[1].data = freqChart.data.labels.map(l => l === Math.round(state.w) ? state.X_amp : null);
+    freqChart.update('none');
 
     renderer.render(scene, camera);
     requestAnimationFrame(loop);
 };
 
 window.onload = () => {
-    init3D();
-    initCharts();
+    init3D(); 
+    initCharts(); 
+    updateFreqChart();
     loop();
     
-    const controls = [['input-mass', 'm', 'val-mass'], ['input-stiffness', 'k', 'val-stiffness'], ['input-damping', 'zeta', 'val-damping'], ['input-freq', 'w', 'val-freq'], ['input-force', 'f0', 'val-force']];
-    controls.forEach(c => {
-        document.getElementById(c[0]).addEventListener('input', (e) => {
-            state[c[1]] = parseFloat(e.target.value);
-            document.getElementById(c[2]).innerText = state[c[1]].toFixed(2);
+    const inputs = [['input-mass', 'm', 'val-mass'], ['input-stiffness', 'k', 'val-stiffness'], ['input-damping', 'zeta', 'val-damping'], ['input-freq', 'w', 'val-freq'], ['input-force', 'f0', 'val-force']];
+    inputs.forEach(i => {
+        document.getElementById(i[0]).addEventListener('input', (e) => {
+            state[i[1]] = parseFloat(e.target.value);
+            document.getElementById(i[2]).innerText = state[i[1]].toFixed(2);
+            updateFreqChart();
         });
     });
 };
 
-// Handle window resizing
 window.addEventListener('resize', () => {
     const container = document.getElementById('canvas-container');
     camera.aspect = container.clientWidth / container.clientHeight;
