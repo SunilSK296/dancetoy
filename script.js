@@ -1,153 +1,67 @@
-const canvas = document.getElementById("toyCanvas");
-const ctx = canvas.getContext("2d");
+const scene = new THREE.Scene();
 
-canvas.width = 400;
-canvas.height = 500;
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.z = 5;
 
-// Inputs
-const mSlider = document.getElementById("mass");
-const kSlider = document.getElementById("k");
-const cSlider = document.getElementById("c");
-const fSlider = document.getElementById("freq");
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-const fnBox = document.getElementById("fnBox");
-const ampBox = document.getElementById("ampBox");
-const statusBox = document.getElementById("status");
+// LIGHT
+const light = new THREE.PointLight(0xffffff,1);
+light.position.set(5,5,5);
+scene.add(light);
 
-// Charts
-const freqChart = new Chart(document.getElementById("freqChart"), {
-    type: 'line',
-    data: { labels: [], datasets: [{ label: 'Amplitude', data: [] }] },
-});
+// BASE
+const base = new THREE.Mesh(
+new THREE.BoxGeometry(2,0.2,2),
+new THREE.MeshStandardMaterial({color:0x444444})
+);
+base.position.y = -2;
+scene.add(base);
 
-const timeChart = new Chart(document.getElementById("timeChart"), {
-    type: 'line',
-    data: { labels: [], datasets: [{ label: 'Displacement', data: [] }] },
-});
+// SPRING (simplified)
+const spring = new THREE.Mesh(
+new THREE.CylinderGeometry(0.1,0.1,2,32),
+new THREE.MeshStandardMaterial({color:0xaaaaaa})
+);
+scene.add(spring);
+
+// HEAD
+const head = new THREE.Mesh(
+new THREE.SphereGeometry(0.5,32,32),
+new THREE.MeshStandardMaterial({color:0xffd166})
+);
+scene.add(head);
 
 let t = 0;
 
-function updatePhysics() {
+function compute() {
+let m = document.getElementById("m").value;
+let k = document.getElementById("k").value;
+let c = document.getElementById("c").value;
+let f = document.getElementById("f").value;
 
-    let m = parseFloat(mSlider.value);
-    let k = parseFloat(kSlider.value);
-    let c = parseFloat(cSlider.value);
-    let f = parseFloat(fSlider.value);
+let omega = 2*Math.PI*f;
 
-    let omega = 2 * Math.PI * f;
+let A = 1/Math.sqrt((k-m*omega*omega)**2 + (c*omega)**2);
 
-    let fn = (1/(2*Math.PI)) * Math.sqrt(k/m);
-
-    let A = 1 / Math.sqrt((k - m*omega**2)**2 + (c*omega)**2);
-
-    fnBox.innerHTML = `Natural Frequency: ${fn.toFixed(2)} Hz`;
-    ampBox.innerHTML = `Amplitude: ${A.toFixed(3)}`;
-
-    if (Math.abs(fn - f) < 2) {
-        statusBox.innerHTML = "🔥 Resonance!";
-    } else {
-        statusBox.innerHTML = "⚠️ Not in resonance";
-    }
-
-    return {A, omega, fn};
+return {A, omega};
 }
 
-// Frequency Graph
-function updateFreqGraph(m, k, c) {
+function animate() {
+requestAnimationFrame(animate);
 
-    let freqs = [];
-    let amps = [];
+let {A, omega} = compute();
 
-    for (let f = 1; f <= 30; f++) {
-        let omega = 2*Math.PI*f;
-        let A = 1 / Math.sqrt((k - m*omega**2)**2 + (c*omega)**2);
-        freqs.push(f);
-        amps.push(A);
-    }
+let y = Math.sin(omega*t) * A * 2;
 
-    freqChart.data.labels = freqs;
-    freqChart.data.datasets[0].data = amps;
-    freqChart.update();
+head.position.y = y;
+spring.scale.y = 1 + y;
+
+t += 0.03;
+
+renderer.render(scene, camera);
 }
 
-// Time Graph
-function updateTimeGraph(A, omega) {
-
-    let tVals = [];
-    let xVals = [];
-
-    for (let i = 0; i < 100; i++) {
-        let tt = i * 0.05;
-        tVals.push(tt);
-        xVals.push(A * Math.sin(omega * tt));
-    }
-
-    timeChart.data.labels = tVals;
-    timeChart.data.datasets[0].data = xVals;
-    timeChart.update();
-}
-
-// Animation
-function draw(A, omega) {
-
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    let x = A * Math.sin(omega * t) * 100;
-
-    // Base
-    ctx.fillStyle = "#555";
-    ctx.fillRect(150, 450, 100, 20);
-
-    let baseY = 450;
-    let topY = 300 + x;
-
-    // Spring
-    ctx.beginPath();
-    for (let i = 0; i < 12; i++) {
-        let xPos = (i % 2 === 0) ? 180 : 220;
-        let yPos = baseY - i * ((baseY - topY)/12);
-        ctx.lineTo(xPos, yPos);
-    }
-    ctx.strokeStyle = "white";
-    ctx.stroke();
-
-    // Body
-    ctx.fillStyle = "#00d4ff";
-    ctx.fillRect(180, topY - 50, 40, 50);
-
-    // Head
-    ctx.beginPath();
-    ctx.arc(200, topY - 70, 20, 0, Math.PI*2);
-    ctx.fillStyle = "#ffd166";
-    ctx.fill();
-
-    // Eyes
-    ctx.fillStyle = "black";
-    ctx.fillRect(193, topY - 75, 4, 4);
-    ctx.fillRect(203, topY - 75, 4, 4);
-
-    // Smile
-    ctx.beginPath();
-    ctx.arc(200, topY - 65, 8, 0, Math.PI);
-    ctx.stroke();
-
-    t += 0.05;
-}
-
-function loop() {
-
-    let m = parseFloat(mSlider.value);
-    let k = parseFloat(kSlider.value);
-    let c = parseFloat(cSlider.value);
-
-    let {A, omega, fn} = updatePhysics();
-
-    draw(A, omega);
-
-    updateFreqGraph(m, k, c);
-    updateTimeGraph(A, omega);
-
-    requestAnimationFrame(loop);
-}
-
-loop();
+animate();
