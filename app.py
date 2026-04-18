@@ -7,103 +7,189 @@ from pdf2image import convert_from_path
 import tempfile
 import os
 
-# --- CORE FORENSICS ---
+# ------------------------------
+# LOAD OCR (cached)
+# ------------------------------
+@st.cache_resource
+def load_ocr():
+    return easyocr.Reader(['en','hi'], gpu=False)
 
+reader = load_ocr()
+
+# ------------------------------
+# ELA FUNCTION
+# ------------------------------
 def perform_ela(image_path, quality=90):
-    """Error Level Analysis to find digital tampering."""
     original = Image.open(image_path).convert('RGB')
+
     with tempfile.NamedTemporaryFile(suffix='.jpg') as tmp:
         original.save(tmp.name, 'JPEG', quality=quality)
-        temporary = Image.open(tmp.name)
-        ela_image = ImageChops.difference(original, temporary)
-        extrema = ela_image.getextrema()
-        max_diff = max([ex[1] for ex in extrema]) or 1
-        scale = 255.0 / max_diff
-        return ImageEnhance.Brightness(ela_image).enhance(scale)
+        resaved = Image.open(tmp.name)
 
-def get_suspicious_regions(ela_image):
-    """Finds bright spots in ELA map using corrected OpenCV methods."""
-    img = np.array(ela_image)
+        diff = ImageChops.difference(original, resaved)
+
+        extrema = diff.getextrema()
+        max_diff = max([ex[1] for ex in extrema]) or 1
+
+        scale = 255.0 / max_diff
+        ela_img = ImageEnhance.Brightness(diff).enhance(scale)
+
+    return ela_img
+
+# ------------------------------
+# FIND SUSPICIOUS REGIONS
+# ------------------------------
+def get_suspicious_regions(ela_img):
+    img = np.array(ela_img)
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
     _, thresh = cv2.threshold(gray, 40, 255, cv2.THRESH_BINARY)
-    
-    # FIXED: findContours (no underscore) + Version-safe unpacking
+
     cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = cnts[0] if len(cnts) == 2 else cnts[1]
+
     return contours
 
-# --- MAIN APP ---
+# ------------------------------
+# DRAW BOXES
+# ------------------------------
+def draw_boxes(image_path, contours):
+    image = cv2.imread(image_path)
 
+    valid_contours = []
+
+    for c in contours:
+        if cv2.contourArea(c) > 120:
+            x, y, w, h = cv2.boundingRect(c)
+            cv2.rectangle(image, (x, y), (x+w, y+h), (255, 0, 0), 2)
+            valid_contours.append(c)
+
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    return image, valid_contours
+
+# ------------------------------
+# OCR FUNCTION
+# ------------------------------
+def run_ocr(image_path):
+    results = reader.readtext(image_path)
+    texts = [res[1] for res in results]
+    return texts, results
+
+# ------------------------------
+# SCORING LOGIC
+# ------------------------------
+def compute_score(valid_contours, texts):
+    score = 0
+    reasons = []
+
+    # ELA score
+    if len(valid_contours) > 5:
+        score += 40
+        reasons.append("Multiple compression anomalies detected")
+
+    elif len(valid_contours) > 2:
+        score += 25
+        reasons.append("Moderate suspicious regions detected")
+
+    # Text check (simple rule)
+    text_blob = " ".join(texts).lower()
+
+    if any(name in text_blob for name in ["elon musk", "jeff bezos"]):
+        score += 30
+        reasons.append("Suspicious or unrealistic identity detected")
+
+    if len(texts) < 3:
+        score += 10
+        reasons.append("Low OCR text content (possible tampering)")
+
+    # Final classification
+    if score > 70:
+        status = "SUSPICIOUS"
+    elif score > 40:
+        status = "NEEDS REVIEW"
+    else:
+        status = "LIKELY GENUINE"
+
+    return score, status, reasons
+
+# ------------------------------
+# MAIN APP
+# ------------------------------
 def main():
-    st.set_page_config(page_title="DocGuard Pro", layout="wide")
-    st.title("🛡️ DocGuard: XAI Forgery Detector")
-    st.markdown("Prototype for **Hackathon 2026**. Detects tampering via ELA and Structural OCR.")
+    st.set_page_config(page_title="DocGuard AI", layout="wide")
 
-    uploaded_file = st.sidebar.file_uploader("Upload Document (JPG/PNG/PDF)", type=["jpg", "png", "jpeg", "pdf"])
+    st.title("🛡️ DocGuard AI – Explainable Document Forgery Detector")
+    st.write("Upload a document (image/PDF) to detect forgery using OCR + ELA.")
+
+    uploaded_file = st.file_uploader("Upload Document", type=["jpg","jpeg","png","pdf"])
 
     if uploaded_file:
-        # Create temp file to store upload
-        suffix = os.path.splitext(uploaded_file.name)[1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tfile:
-            tfile.write(uploaded_file.read())
-            input_path = tfile.name
 
-        # PDF Handling
+        # Save temp file
+        suffix = os.path.splitext(uploaded_file.name)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(uploaded_file.read())
+            input_path = tmp.name
+
+        # Handle PDF
         if suffix.lower() == ".pdf":
-            with st.spinner("Converting PDF..."):
-                pages = convert_from_path(input_path)
-                img_path = "temp_page.jpg"
-                pages[0].save(img_path, "JPEG")
+            pages = convert_from_path(input_path)
+            img_path = "temp.jpg"
+            pages[0].save(img_path, "JPEG")
         else:
             img_path = input_path
 
-        # Execution
-        with st.spinner("Analyzing Forensics..."):
-            # 1. Forensic ELA
-            ela_result = perform_ela(img_path)
-            contours = get_suspicious_regions(ela_result)
-            
-            # 2. Text Logic (Simplified for Demo)
-            reader = easyocr.Reader(['en'], gpu=False)
-            ocr_results = reader.readtext(img_path)
-            extracted_text = [res[1] for res in ocr_results]
+        with st.spinner("Analyzing document..."):
 
-            # 3. Annotation
-            annotated_img = cv2.imread(img_path)
-            for c in contours:
-                if cv2.contourArea(c) > 100: # Filter noise
-                    x, y, w, h = cv2.boundingRect(c)
-                    cv2.rectangle(annotated_img, (x, y), (x+w, y+h), (255, 0, 0), 3)
-            annotated_img = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
+            # 1. ELA
+            ela_img = perform_ela(img_path)
+            contours = get_suspicious_regions(ela_img)
 
-        # UI LAYOUT
+            # 2. Draw regions
+            annotated_img, valid_contours = draw_boxes(img_path, contours)
+
+            # 3. OCR
+            texts, raw_ocr = run_ocr(img_path)
+
+            # 4. Scoring
+            score, status, reasons = compute_score(valid_contours, texts)
+
+        # ---------------- UI ----------------
         col1, col2 = st.columns(2)
+
         with col1:
-            st.subheader("Analysis View")
-            # FIXED: width='stretch' for 2026 compatibility
-            st.image(annotated_img, caption="Red Boxes = Potential Edits", width="stretch")
-        
+            st.subheader("📄 Annotated Document")
+            st.image(annotated_img, width="stretch")
+
         with col2:
-            st.subheader("ELA Forensic Map")
-            st.image(ela_result, caption="Brighter areas = Compression Inconsistency", width="stretch")
+            st.subheader("🔥 ELA Map")
+            st.image(ela_img, width="stretch")
 
         st.divider()
 
-        # XAI REPORT
-        st.subheader("📋 Explainable AI Report")
-        suspicion_score = min(len(contours) * 4, 100)
-        
-        if suspicion_score > 60:
-            st.error(f"STATUS: SUSPICIOUS (Confidence: {suspicion_score}%)")
-            st.write("**Reasons:**")
-            st.write("- Multiple high-frequency compression artifacts detected in localized areas.")
-            if any(name in " ".join(extracted_text).lower() for name in ["elon musk", "jeff bezos"]):
-                st.write("- 🚩 Blacklisted/Suspicious entity name detected in text.")
+        # ---------------- REPORT ----------------
+        st.subheader("📋 Explainable Report")
+
+        if status == "SUSPICIOUS":
+            st.error(f"Status: {status} | Confidence: {score}%")
+        elif status == "NEEDS REVIEW":
+            st.warning(f"Status: {status} | Confidence: {score}%")
         else:
-            st.success(f"STATUS: LIKELY GENUINE (Confidence: {100 - suspicion_score}%)")
+            st.success(f"Status: {status} | Confidence: {100-score}%")
 
-        with st.expander("Show Extracted Text"):
-            st.write(extracted_text)
+        st.write("### Reasons:")
+        if reasons:
+            for r in reasons:
+                st.write(f"- {r}")
+        else:
+            st.write("- No strong anomalies detected")
 
+        st.write("### Suspicious Regions Detected:", len(valid_contours))
+
+        with st.expander("📄 Extracted Text"):
+            st.write(texts)
+
+# ------------------------------
 if __name__ == "__main__":
     main()
