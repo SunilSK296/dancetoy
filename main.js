@@ -47,7 +47,7 @@ const updatePhysics = (dt) => {
 };
 
 // --- B. THREE.JS VISUALIZER (Robot Construction) ---
-let scene, camera, renderer, spring, robot, robotHead, platform;
+let scene, camera, renderer, spring, robot, robotHead, leftArm, rightArm, platform;
 
 const init3D = () => {
     const container = document.getElementById('canvas-container');
@@ -84,13 +84,26 @@ const init3D = () => {
     // Robot Toy
     robot = new THREE.Group();
     const bodyMat = new THREE.MeshStandardMaterial({ color: 0x333a4d, metalness: 0.7, roughness: 0.3 });
-    const accentMat = new THREE.MeshStandardMaterial({ color: 0x00f2ff, metalness: 0.9, emissive: 0x00f2ff, emissiveIntensity: 0.3 });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x00f2ff, metalness: 0.9, emissive: 0x00f2ff, emissiveIntensity: 1.0 }); // Bright, glowing eyes
+    const armMat = new THREE.MeshStandardMaterial({ color: 0x4a5161, metalness: 0.6, roughness: 0.4 });
 
     // Robot Body
     const bodyMesh = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.0, 2.5, 6), bodyMat);
     bodyMesh.position.y = 1.25;
     bodyMesh.castShadow = true;
     robot.add(bodyMesh);
+
+    // Robot Arms
+    const armGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.5, 16);
+    leftArm = new THREE.Mesh(armGeo, armMat);
+    leftArm.position.set(-1.4, 1.5, 0);
+    leftArm.castShadow = true;
+    robot.add(leftArm);
+
+    rightArm = new THREE.Mesh(armGeo, armMat);
+    rightArm.position.set(1.4, 1.5, 0);
+    rightArm.castShadow = true;
+    robot.add(rightArm);
 
     // Robot Head Assembly
     robotHead = new THREE.Group();
@@ -102,7 +115,7 @@ const init3D = () => {
 
     // Eyes
     const eyeGeo = new THREE.SphereGeometry(0.2, 16, 16);
-    const eyeR = new THREE.Mesh(eyeGeo, new THREE.MeshStandardMaterial({color: 0x000000}));
+    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
     eyeR.position.set(0.4, 1.1, 0.82);
     robotHead.add(eyeR);
     const eyeL = eyeR.clone();
@@ -220,6 +233,11 @@ const loop = () => {
     const r = state.w / (Math.sqrt(state.k / state.m));
     const headLag = Math.sin(state.t * state.w - (state.phase * Math.PI / 180));
     robotHead.rotation.x = headLag * (state.X_amp * 1.5); 
+
+    // Realistic Arm Movement (Physics-driven lag)
+    const armLag = Math.cos(state.t * state.w - (state.phase * Math.PI / 180));
+    leftArm.rotation.x = armLag * (state.X_amp * 2); 
+    rightArm.rotation.x = -armLag * (state.X_amp * 2); // Reverse rotation for opposite arm movement
 
     document.getElementById('metric-fn').innerText = `${state.fn.toFixed(2)} Hz`;
     document.getElementById('metric-amp').innerText = `${state.X_amp.toFixed(4)} m`;
