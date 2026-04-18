@@ -18,6 +18,7 @@
         #canvas-container:active { cursor: grabbing; }
         .resonance-glow { animation: pulse 1s infinite; border-color: #ef4444 !important; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); } 70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+        /* Absorb Tailwind's default focus ring */
         input:focus { outline: none !important; box-shadow: none !important; }
     </style>
 </head>
@@ -38,25 +39,25 @@
         
         <aside class="col-span-3 flex flex-col gap-3 overflow-y-auto pr-1">
             <section class="glass p-6 rounded-2xl">
-                <h2 class="text-xs font-bold mb-7 text-gray-500 uppercase tracking-widest text-center">Mechanical Specs</h2>
+                <h2 class="text-xs font-bold mb-7 text-gray-500 uppercase tracking-widest">Mechanical Properties</h2>
                 <div class="space-y-9">
                     <div class="group">
-                        <div class="flex justify-between mb-2.5">
-                            <label class="text-xs uppercase text-gray-400">Toy Mass (m)</label>
+                        <div class="flex justify-between mb-2.5 items-baseline">
+                            <label class="text-xs uppercase text-gray-400 font-medium">Toy Mass (m)</label>
                             <span class="accent-text text-sm font-mono" id="val-mass">0.5 kg</span>
                         </div>
                         <input type="range" id="input-mass" min="0.1" max="5.0" step="0.1" value="0.5" class="w-full neo-slider h-1">
                     </div>
                     <div class="group">
-                        <div class="flex justify-between mb-2.5">
-                            <label class="text-xs uppercase text-gray-400">Stiffness (k)</label>
+                        <div class="flex justify-between mb-2.5 items-baseline">
+                            <label class="text-xs uppercase text-gray-400 font-medium">Spring Stiffness (k)</label>
                             <span class="accent-text text-sm font-mono" id="val-stiffness">200 N/m</span>
                         </div>
                         <input type="range" id="input-stiffness" min="50" max="1000" step="10" value="200" class="w-full neo-slider h-1">
                     </div>
                     <div class="group">
-                        <div class="flex justify-between mb-2.5">
-                            <label class="text-xs uppercase text-gray-400">Damping (ζ)</label>
+                        <div class="flex justify-between mb-2.5 items-baseline">
+                            <label class="text-xs uppercase text-gray-400 font-medium">Damping Ratio (ζ)</label>
                             <span class="accent-text text-sm font-mono" id="val-damping">0.10</span>
                         </div>
                         <input type="range" id="input-damping" min="0.01" max="0.5" step="0.01" value="0.1" class="w-full neo-slider h-1">
@@ -65,18 +66,18 @@
             </section>
 
             <section class="glass p-6 rounded-2xl">
-                <h2 class="text-xs font-bold mb-7 text-gray-500 uppercase tracking-widest text-center">Excitation Force</h2>
+                <h2 class="text-xs font-bold mb-7 text-gray-500 uppercase tracking-widest">Excitation Force</h2>
                 <div class="space-y-9">
                     <div class="group">
-                        <div class="flex justify-between mb-2.5">
-                            <label class="text-xs uppercase text-gray-400">Freq (ω)</label>
+                        <div class="flex justify-between mb-2.5 items-baseline">
+                            <label class="text-xs uppercase text-gray-400 font-medium">Input Freq (ω)</label>
                             <span class="accent-text text-sm font-mono" id="val-freq">10.0 rad/s</span>
                         </div>
                         <input type="range" id="input-freq" min="1" max="60" step="0.5" value="10" class="w-full neo-slider h-1">
                     </div>
                     <div class="group">
-                        <div class="flex justify-between mb-2.5">
-                            <label class="text-xs uppercase text-gray-400">Force Amp (F₀)</label>
+                        <div class="flex justify-between mb-2.5 items-baseline">
+                            <label class="text-xs uppercase text-gray-400 font-medium">Force Amp (F₀)</label>
                             <span class="accent-text text-sm font-mono" id="val-force">10.0 N</span>
                         </div>
                         <input type="range" id="input-force" min="1" max="50" step="1" value="10" class="w-full neo-slider h-1">
@@ -89,15 +90,16 @@
             <div id="canvas-container" class="flex-1 glass rounded-3xl relative overflow-hidden border border-white/5">
                 <div class="absolute top-7 left-7 z-10 space-y-3 pointer-events-none">
                     <div class="glass px-5 py-3 rounded-xl border border-white/5">
-                        <div class="text-[10px] text-gray-600 uppercase tracking-widest mb-1">Natural Frequency</div>
+                        <div class="text-[10px] text-gray-600 uppercase tracking-widest font-medium mb-1">Natural Frequency</div>
                         <div class="text-2xl font-mono accent-text font-bold" id="metric-fn">-- Hz</div>
                     </div>
                     <div class="glass px-5 py-3 rounded-xl border border-white/5">
-                        <div class="text-[10px] text-gray-600 uppercase tracking-widest mb-1">Response Amplitude</div>
+                        <div class="text-[10px] text-gray-600 uppercase tracking-widest font-medium mb-1">Peak Displacement</div>
                         <div class="text-2xl font-mono text-white font-bold" id="metric-amp">-- m</div>
                     </div>
                 </div>
-            </div>
+                </div>
+            
             <div class="h-48 glass rounded-3xl p-5 border border-white/5">
                 <canvas id="timeChart"></canvas>
             </div>
@@ -105,7 +107,7 @@
 
         <aside class="col-span-3 flex flex-col gap-3">
             <div class="flex-1 glass rounded-3xl p-5 flex flex-col border border-white/5">
-                <h2 class="text-xs font-bold mb-5 text-gray-500 uppercase tracking-widest text-center">Response Curve</h2>
+                <h2 class="text-xs font-bold mb-5 text-gray-500 uppercase tracking-widest text-center">Frequency Response (Bode)</h2>
                 <div class="flex-1 relative">
                     <canvas id="freqChart"></canvas>
                 </div>
@@ -119,7 +121,7 @@
                     <span class="text-xs text-gray-600 uppercase tracking-wider">Phase Lag</span>
                     <span id="status-phase" class="text-xs font-mono text-gray-400 text-sm">-- °</span>
                 </div>
-                <button onclick="resetSystem()" class="w-full py-3.5 rounded-xl bg-white/5 hover:bg-white/10 transition-all text-xs font-bold tracking-widest uppercase mt-1 border border-white/5">
+                <button onclick="resetSystem()" class="w-full py-3.5 rounded-xl bg-white/5 hover:bg-white/10 transition-all text-xs font-bold tracking-widest uppercase mt-1 border border-white/5 active:scale-[0.98]">
                     Recalibrate Integrator
                 </button>
             </div>
