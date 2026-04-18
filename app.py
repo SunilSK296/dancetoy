@@ -37,8 +37,10 @@ def get_suspicious_regions(ela_image):
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     _, thresh = cv2.threshold(gray, 40, 255, cv2.THRESH_BINARY)
     
-    # Find contours of bright spots
-    contours, _ = cv2.find_contours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # FIX: This handles both OpenCV 3 and 4+
+    cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = cnts[0] if len(cnts) == 2 else cnts[1]
+    
     return contours
 
 # --- 2. TEXT ANALYTICS ---
